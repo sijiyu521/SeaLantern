@@ -19,7 +19,18 @@ export const contributors: Contributor[] = [
     avatar: "https://mc-heads.net/avatar/FPS_Z/64",
     url: "https://gitee.com/fps_z",
   },
-
+  {
+    name: "鸽德迪",
+    role: "自定义背景图方案",
+    avatar: "https://mc-heads.net/avatar/Alex/64",
+    //url: "https://gitee.com/fps_z",
+  },  
+  {
+    name: "OMIILII",
+    role: "精神支柱",
+    avatar: "https://mc-heads.net/avatar/Alex/64",
+    //url: "https://gitee.com/fps_z",
+  },
   
   // ============================================
   // 在这里添加更多贡献者！

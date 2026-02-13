@@ -36,6 +36,18 @@ pub fn import_server(
 }
 
 #[tauri::command]
+pub fn import_modpack(
+    name: String,
+    modpack_path: String,
+    java_path: String,
+    max_memory: u32,
+    min_memory: u32,
+) -> Result<ServerInstance, String> {
+    let req = ImportModpackRequest { name, modpack_path, java_path, max_memory, min_memory };
+    manager().import_modpack(req)
+}
+
+#[tauri::command]
 pub fn start_server(id: String) -> Result<(), String> {
     manager().start_server(&id)
 }

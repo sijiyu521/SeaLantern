@@ -1,5 +1,5 @@
 use std::collections::HashMap;
-use std::io::{BufRead, BufReader, Write};
+use std::io::{BufRead, BufReader, Write, Read};
 use std::process::{Child, Command, Stdio};
 use std::sync::Mutex;
 use std::time::{SystemTime, UNIX_EPOCH};
@@ -61,14 +61,119 @@ impl ServerManager {
     }
 
     pub fn import_server(&self, req: ImportServerRequest) -> Result<ServerInstance, String> {
-        if !std::path::Path::new(&req.jar_path).exists() {
+        let source_jar = std::path::Path::new(&req.jar_path);
+        if !source_jar.exists() {
             return Err(format!("JAR file not found: {}", req.jar_path));
         }
-        self.create_server(CreateServerRequest {
-            name: req.name, core_type: "unknown".into(), mc_version: "unknown".into(),
-            max_memory: req.max_memory, min_memory: req.min_memory,
-            port: 25565, java_path: req.java_path, jar_path: req.jar_path,
-        })
+
+        // 在软件目录下创建服务器文件夹
+        let id = uuid::Uuid::new_v4().to_string();
+        let data_dir = self.data_dir.lock().unwrap().clone();
+        let servers_dir = std::path::Path::new(&data_dir).join("servers");
+        let server_dir = servers_dir.join(&id);
+
+        // 创建服务器目录
+        std::fs::create_dir_all(&server_dir)
+            .map_err(|e| format!("无法创建服务器目录: {}", e))?;
+
+        // 复制JAR文件到服务器目录
+        let jar_filename = source_jar.file_name()
+            .ok_or_else(|| "无法获取JAR文件名".to_string())?;
+        let dest_jar = server_dir.join(jar_filename);
+
+        std::fs::copy(source_jar, &dest_jar)
+            .map_err(|e| format!("复制JAR文件失败: {}", e))?;
+
+        println!("已复制JAR文件: {} -> {}", req.jar_path, dest_jar.display());
+
+        // 创建服务器实例
+        let now = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs();
+        let server = ServerInstance {
+            id: id.clone(),
+            name: req.name,
+            core_type: "unknown".into(),
+            core_version: String::new(),
+            mc_version: "unknown".into(),
+            path: server_dir.to_string_lossy().to_string(),
+            jar_path: dest_jar.to_string_lossy().to_string(),
+            java_path: req.java_path,
+            max_memory: req.max_memory,
+            min_memory: req.min_memory,
+            jvm_args: Vec::new(),
+            port: 25565,
+            created_at: now,
+            last_started_at: None,
+        };
+
+        self.servers.lock().unwrap().push(server.clone());
+        self.logs.lock().unwrap().insert(id, Vec::new());
+        self.save();
+        Ok(server)
+    }
+
+    pub fn import_modpack(&self, req: ImportModpackRequest) -> Result<ServerInstance, String> {
+        let source_path = std::path::Path::new(&req.modpack_path);
+        if !source_path.exists() {
+            return Err(format!("整合包文件夹不存在: {}", req.modpack_path));
+        }
+        if !source_path.is_dir() {
+            return Err("所选路径不是文件夹".to_string());
+        }
+
+        // 查找服务端JAR文件
+        let source_jar = find_server_jar(source_path)?;
+        println!("找到服务端JAR文件: {}", source_jar);
+
+        // 在软件目录下创建服务器文件夹
+        let id = uuid::Uuid::new_v4().to_string();
+        let data_dir = self.data_dir.lock().unwrap().clone();
+        let servers_dir = std::path::Path::new(&data_dir).join("servers");
+        let server_dir = servers_dir.join(&id);
+
+        // 创建服务器目录
+        std::fs::create_dir_all(&server_dir)
+            .map_err(|e| format!("无法创建服务器目录: {}", e))?;
+
+        // 复制整合包文件夹的所有内容到服务器目录
+        println!("正在复制整合包文件: {} -> {}", source_path.display(), server_dir.display());
+        copy_dir_recursive(source_path, &server_dir)
+            .map_err(|e| format!("复制整合包文件失败: {}", e))?;
+
+        // 获取复制后的JAR文件路径
+        let jar_filename = std::path::Path::new(&source_jar)
+            .file_name()
+            .ok_or_else(|| "无法获取JAR文件名".to_string())?;
+        let dest_jar = server_dir.join(jar_filename);
+
+        if !dest_jar.exists() {
+            return Err(format!("复制后的JAR文件不存在: {}", dest_jar.display()));
+        }
+
+        // 创建服务器实例
+        let now = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs();
+        let server = ServerInstance {
+            id: id.clone(),
+            name: req.name,
+            core_type: "modpack".into(),
+            core_version: String::new(),
+            mc_version: "unknown".into(),
+            path: server_dir.to_string_lossy().to_string(),
+            jar_path: dest_jar.to_string_lossy().to_string(),
+            java_path: req.java_path,
+            max_memory: req.max_memory,
+            min_memory: req.min_memory,
+            jvm_args: Vec::new(),
+            port: 25565,
+            created_at: now,
+            last_started_at: None,
+        };
+
+        println!("创建服务器实例: id={}, path={}, jar_path={}", server.id, server.path, server.jar_path);
+
+        self.servers.lock().unwrap().push(server.clone());
+        self.logs.lock().unwrap().insert(id, Vec::new());
+        self.save();
+        Ok(server)
     }
 
     pub fn start_server(&self, id: &str) -> Result<(), String> {
@@ -77,6 +182,9 @@ impl ServerManager {
             servers.iter().find(|s| s.id == id)
                 .ok_or_else(|| "未找到服务器".to_string())?.clone()
         };
+
+        println!("准备启动服务器: id={}, name={}, jar_path={}, java_path={}",
+                 server.id, server.name, server.jar_path, server.java_path);
 
         // Check if already running
         {
@@ -96,17 +204,59 @@ impl ServerManager {
             let _ = std::fs::write(&eula, "# Auto-accepted by Sea Lantern\neula=true\n");
         }
 
+        // 使用最简单的方式直接启动Java
         let mut cmd = Command::new(&server.java_path);
         cmd.arg(format!("-Xmx{}M", server.max_memory));
         cmd.arg(format!("-Xms{}M", server.min_memory));
-        let jvm = settings.default_jvm_args.trim();
-        if !jvm.is_empty() { for arg in jvm.split_whitespace() { cmd.arg(arg); } }
-        for arg in &server.jvm_args { cmd.arg(arg); }
-        cmd.arg("-jar").arg(&server.jar_path).arg("nogui");
-        cmd.current_dir(&server.path);
-        cmd.stdout(Stdio::piped()).stderr(Stdio::piped()).stdin(Stdio::piped());
 
-        // Hide console window on Windows
+        // 强制使用UTF-8编码，避免Windows上的中文乱码问题
+        cmd.arg("-Dfile.encoding=UTF-8");
+        cmd.arg("-Dsun.stdout.encoding=UTF-8");
+        cmd.arg("-Dsun.stderr.encoding=UTF-8");
+
+        let jvm = settings.default_jvm_args.trim();
+        if !jvm.is_empty() {
+            for arg in jvm.split_whitespace() {
+                cmd.arg(arg);
+            }
+        }
+
+        for arg in &server.jvm_args {
+            cmd.arg(arg);
+        }
+
+        cmd.arg("-jar");
+
+        // 由于JAR文件现在都在服务器目录下，直接使用文件名
+        let jar_path_obj = std::path::Path::new(&server.jar_path);
+        let jar_filename = jar_path_obj.file_name()
+            .map(|n| n.to_string_lossy().to_string())
+            .unwrap_or_else(|| server.jar_path.clone());
+
+        cmd.arg(&jar_filename);
+        cmd.arg("nogui");
+
+        cmd.current_dir(&server.path);
+
+        // 使用文件重定向，避免piped导致的Java代理加载问题
+        let log_file = std::path::Path::new(&server.path).join("latest.log");
+
+        // 清空旧日志文件，避免读取历史日志
+        let stdout_file = std::fs::OpenOptions::new()
+            .create(true)
+            .write(true)
+            .truncate(true)
+            .open(&log_file)
+            .map_err(|e| format!("无法创建日志文件: {}", e))?;
+
+        let stderr_file = stdout_file.try_clone()
+            .map_err(|e| format!("无法克隆文件句柄: {}", e))?;
+
+        cmd.stdout(Stdio::from(stdout_file));
+        cmd.stderr(Stdio::from(stderr_file));
+        cmd.stdin(Stdio::piped());
+
+        // 隐藏控制台窗口
         #[cfg(target_os = "windows")]
         {
             use std::os::windows::process::CommandExt;
@@ -115,8 +265,8 @@ impl ServerManager {
         }
 
         let mut child = cmd.spawn().map_err(|e| format!("启动失败: {}", e))?;
-        let stdout = child.stdout.take();
-        let stderr = child.stderr.take();
+        println!("Java进程已启动，PID: {:?}", child.id());
+
         self.processes.lock().unwrap().insert(id.to_string(), child);
 
         {
@@ -128,37 +278,56 @@ impl ServerManager {
         self.save();
         self.append_log(id, "[Sea Lantern] 服务器启动中...");
 
+        // 启动日志读取线程
         let logs_ref = &self.logs as *const Mutex<HashMap<String, Vec<String>>>;
         let max_lines = settings.max_log_lines as usize;
+        let lid = id.to_string();
+        let ptr = logs_ref as usize;
+        let ml = max_lines;
+        let log_path = log_file.clone();
 
-        if let Some(out) = stdout {
-            let lid = id.to_string(); let ptr = logs_ref as usize; let ml = max_lines;
-            std::thread::spawn(move || {
-                let m = unsafe { &*(ptr as *const Mutex<HashMap<String, Vec<String>>>) };
-                for line in BufReader::new(out).lines() {
-                    match line {
-                        Ok(t) => {
-                            if let Ok(mut l) = m.lock() { if let Some(v) = l.get_mut(&lid) { v.push(t); if v.len() > ml { let d = v.len()-ml; v.drain(0..d); } } }
+        std::thread::spawn(move || {
+            use std::io::Seek;
+            let mut pos = 0u64;
+            let mut last_size = 0u64;
+
+            loop {
+                std::thread::sleep(std::time::Duration::from_millis(500));
+
+                if let Ok(mut file) = std::fs::File::open(&log_path) {
+                    if let Ok(metadata) = file.metadata() {
+                        let len = metadata.len();
+
+                        if len > last_size {
+                            if file.seek(std::io::SeekFrom::Start(pos)).is_ok() {
+                                let m = unsafe { &*(ptr as *const Mutex<HashMap<String, Vec<String>>>) };
+                                let mut buffer = Vec::new();
+
+                                if file.read_to_end(&mut buffer).is_ok() {
+                                    let content = String::from_utf8_lossy(&buffer);
+                                    for line in content.lines() {
+                                        if !line.trim().is_empty() {
+                                            if let Ok(mut l) = m.lock() {
+                                                if let Some(v) = l.get_mut(&lid) {
+                                                    v.push(line.to_string());
+                                                    if v.len() > ml {
+                                                        let d = v.len() - ml;
+                                                        v.drain(0..d);
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+                                    pos = len;
+                                }
+                            }
+                            last_size = len;
                         }
-                        Err(_) => break,
                     }
                 }
-            });
-        }
-        if let Some(err) = stderr {
-            let lid = id.to_string(); let ptr = logs_ref as usize; let ml = max_lines;
-            std::thread::spawn(move || {
-                let m = unsafe { &*(ptr as *const Mutex<HashMap<String, Vec<String>>>) };
-                for line in BufReader::new(err).lines() {
-                    match line {
-                        Ok(t) => {
-                            if let Ok(mut l) = m.lock() { if let Some(v) = l.get_mut(&lid) { v.push(format!("[STDERR] {}", t)); if v.len() > ml { let d = v.len()-ml; v.drain(0..d); } } }
-                        }
-                        Err(_) => break,
-                    }
-                }
-            });
-        }
+            }
+        });
+
         Ok(())
     }
 
@@ -282,20 +451,90 @@ impl ServerManager {
 }
 
 fn get_data_dir() -> String {
-    // Use a consistent data directory regardless of dev/prod mode
-    // Try to use the user's home directory first
-    if let Some(home_dir) = dirs_next::home_dir() {
-        let data_dir = home_dir.join(".sea-lantern");
-        // Create directory if it doesn't exist
-        if let Err(e) = std::fs::create_dir_all(&data_dir) {
-            eprintln!("Warning: Failed to create data directory: {}", e);
+    // 使用软件根目录（可执行文件所在目录）
+    if let Ok(exe_path) = std::env::current_exe() {
+        if let Some(exe_dir) = exe_path.parent() {
+            let data_dir = exe_dir.to_path_buf();
+            println!("数据目录: {}", data_dir.display());
+            return data_dir.to_string_lossy().to_string();
         }
-        return data_dir.to_string_lossy().to_string();
     }
 
-    // Fallback to current directory
+    // 如果获取失败，使用当前工作目录
+    println!("警告: 无法获取可执行文件目录，使用当前目录");
     ".".to_string()
 }
+
+fn find_server_jar(modpack_path: &std::path::Path) -> Result<String, String> {
+    // 常见的服务端JAR文件名模式
+    let patterns = vec![
+        "server.jar",
+        "forge.jar",
+        "fabric-server.jar",
+        "minecraft_server.jar",
+        "paper.jar",
+        "spigot.jar",
+        "purpur.jar",
+    ];
+
+    // 首先尝试精确匹配
+    for pattern in &patterns {
+        let jar_path = modpack_path.join(pattern);
+        if jar_path.exists() {
+            return Ok(jar_path.to_string_lossy().to_string());
+        }
+    }
+
+    // 如果没有精确匹配，查找所有.jar文件
+    let entries = std::fs::read_dir(modpack_path)
+        .map_err(|e| format!("无法读取文件夹: {}", e))?;
+
+    let mut jar_files = Vec::new();
+    for entry in entries {
+        if let Ok(entry) = entry {
+            let path = entry.path();
+            if path.is_file() {
+                if let Some(ext) = path.extension() {
+                    if ext == "jar" {
+                        jar_files.push(path);
+                    }
+                }
+            }
+        }
+    }
+
+    if jar_files.is_empty() {
+        return Err("整合包文件夹中未找到JAR文件".to_string());
+    }
+
+    // 如果只有一个JAR文件，直接使用
+    if jar_files.len() == 1 {
+        return Ok(jar_files[0].to_string_lossy().to_string());
+    }
+
+    // 如果有多个JAR文件，优先选择包含服务端关键词的文件
+    for jar in &jar_files {
+        if let Some(name) = jar.file_name() {
+            let name_lower = name.to_string_lossy().to_lowercase();
+            if name_lower.contains("server")
+                || name_lower.contains("forge")
+                || name_lower.contains("fabric")
+                || name_lower.contains("mohist")
+                || name_lower.contains("paper")
+                || name_lower.contains("spigot")
+                || name_lower.contains("purpur")
+                || name_lower.contains("bukkit")
+                || name_lower.contains("catserver")
+                || name_lower.contains("arclight") {
+                return Ok(jar.to_string_lossy().to_string());
+            }
+        }
+    }
+
+    // 如果都不匹配，返回第一个JAR文件
+    Ok(jar_files[0].to_string_lossy().to_string())
+}
+
 fn load_servers(dir: &str) -> Vec<ServerInstance> {
     let p = std::path::Path::new(dir).join(DATA_FILE);
     if !p.exists() { return Vec::new(); }
@@ -304,4 +543,24 @@ fn load_servers(dir: &str) -> Vec<ServerInstance> {
 fn save_servers(dir: &str, servers: &[ServerInstance]) {
     let p = std::path::Path::new(dir).join(DATA_FILE);
     if let Ok(j) = serde_json::to_string_pretty(servers) { let _ = std::fs::write(&p, j); }
+}
+
+fn copy_dir_recursive(src: &std::path::Path, dst: &std::path::Path) -> std::io::Result<()> {
+    if !dst.exists() {
+        std::fs::create_dir_all(dst)?;
+    }
+
+    for entry in std::fs::read_dir(src)? {
+        let entry = entry?;
+        let src_path = entry.path();
+        let dst_path = dst.join(entry.file_name());
+
+        if src_path.is_dir() {
+            copy_dir_recursive(&src_path, &dst_path)?;
+        } else {
+            std::fs::copy(&src_path, &dst_path)?;
+        }
+    }
+
+    Ok(())
 }

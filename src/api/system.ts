@@ -12,4 +12,12 @@ export const systemApi = {
   async pickJavaFile(): Promise<string | null> {
     return tauriInvoke("pick_java_file");
   },
+
+  async pickFolder(): Promise<string | null> {
+    return tauriInvoke("pick_folder");
+  },
+
+  async pickImageFile(): Promise<string | null> {
+    return tauriInvoke("pick_image_file");
+  },
 };

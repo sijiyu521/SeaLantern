@@ -244,6 +244,19 @@ function getStatusText(): string {
   const s = serverStore.statuses[serverId.value]?.status;
   return s === "Running" ? "Running" : s === "Starting" ? "Starting" : s === "Stopping" ? "Stopping" : "Stopped";
 }
+
+function handleClearLogs() {
+  const sid = serverId.value;
+  console.log('[清屏] serverId:', sid);
+  console.log('[清屏] 当前日志数量:', currentLogs.value.length);
+  if (!sid) {
+    console.log('[清屏] serverId 为空，取消操作');
+    return;
+  }
+  consoleStore.clearLogs(sid);
+  console.log('[清屏] 清空后日志数量:', currentLogs.value.length);
+  userScrolledUp.value = false;
+}
 </script>
 
 <template>
@@ -265,7 +278,7 @@ function getStatusText(): string {
         <SLButton variant="primary" size="sm" :loading="startLoading" :disabled="isRunning || startLoading" @click="handleStart">启动</SLButton>
         <SLButton variant="danger" size="sm" :loading="stopLoading" :disabled="isStopped || stopLoading" @click="handleStop">停止</SLButton>
         <SLButton variant="secondary" size="sm" @click="exportLogs">复制日志</SLButton>
-        <SLButton variant="ghost" size="sm" @click="serverId && consoleStore.clearLogs(serverId)">清屏</SLButton>
+        <SLButton variant="ghost" size="sm" @click="handleClearLogs">清屏</SLButton>
       </div>
     </div>
 

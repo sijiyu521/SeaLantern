@@ -47,6 +47,22 @@ export const serverApi = {
     });
   },
 
+  async importModpack(params: {
+    name: string;
+    modpackPath: string;
+    javaPath: string;
+    maxMemory: number;
+    minMemory: number;
+  }): Promise<ServerInstance> {
+    return tauriInvoke("import_modpack", {
+      name: params.name,
+      modpackPath: params.modpackPath,
+      javaPath: params.javaPath,
+      maxMemory: params.maxMemory,
+      minMemory: params.minMemory,
+    });
+  },
+
   async start(id: string): Promise<void> {
     return tauriInvoke("start_server", { id });
   },

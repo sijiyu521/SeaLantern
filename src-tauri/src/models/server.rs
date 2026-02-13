@@ -55,3 +55,12 @@ pub struct ImportServerRequest {
     pub max_memory: u32,
     pub min_memory: u32,
 }
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ImportModpackRequest {
+    pub name: String,
+    pub modpack_path: String,
+    pub java_path: String,
+    pub max_memory: u32,
+    pub min_memory: u32,
+}

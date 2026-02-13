@@ -12,6 +12,11 @@ export interface AppSettings {
   console_font_size: number;
   max_log_lines: number;
   cached_java_list: JavaInfo[];
+  background_image: string;
+  background_opacity: number;
+  background_blur: number;
+  background_brightness: number;
+  background_size: string;
 }
 
 export const settingsApi = {

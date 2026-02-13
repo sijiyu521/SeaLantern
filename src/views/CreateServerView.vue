@@ -15,11 +15,8 @@ const router = useRouter();
 const store = useServerStore();
 
 const serverName = ref("My Server");
-const coreType = ref("paper");
-const mcVersion = ref("1.21.4");
 const maxMemory = ref("2048");
 const minMemory = ref("512");
-const port = ref("25565");
 const jarPath = ref("");
 const selectedJava = ref("");
 
@@ -27,7 +24,6 @@ const javaList = ref<JavaInfo[]>([]);
 const javaLoading = ref(false);
 const creating = ref(false);
 const errorMsg = ref<string | null>(null);
-const mode = ref<"create" | "import">("import");
 
 onMounted(async () => {
   await loadDefaultSettings();
@@ -40,7 +36,6 @@ async function loadDefaultSettings() {
     // Load default values from settings
     maxMemory.value = String(settings.default_max_memory);
     minMemory.value = String(settings.default_min_memory);
-    port.value = String(settings.default_port);
 
     // Load cached Java list
     if (settings.cached_java_list && settings.cached_java_list.length > 0) {
@@ -107,32 +102,20 @@ async function pickJavaFile() {
 
 async function handleCreate() {
   errorMsg.value = null;
+
   if (!jarPath.value) { errorMsg.value = "请选择服务端 JAR 文件"; return; }
   if (!selectedJava.value) { errorMsg.value = "请选择 Java 路径"; return; }
   if (!serverName.value.trim()) { errorMsg.value = "请输入服务器名称"; return; }
 
   creating.value = true;
   try {
-    if (mode.value === "import") {
-      await serverApi.importServer({
-        name: serverName.value,
-        jarPath: jarPath.value,
-        javaPath: selectedJava.value,
-        maxMemory: parseInt(maxMemory.value) || 2048,
-        minMemory: parseInt(minMemory.value) || 512,
-      });
-    } else {
-      await serverApi.create({
-        name: serverName.value,
-        coreType: coreType.value,
-        mcVersion: mcVersion.value,
-        maxMemory: parseInt(maxMemory.value) || 2048,
-        minMemory: parseInt(minMemory.value) || 512,
-        port: parseInt(port.value) || 25565,
-        javaPath: selectedJava.value,
-        jarPath: jarPath.value,
-      });
-    }
+    await serverApi.importServer({
+      name: serverName.value,
+      jarPath: jarPath.value,
+      javaPath: selectedJava.value,
+      maxMemory: parseInt(maxMemory.value) || 2048,
+      minMemory: parseInt(minMemory.value) || 512,
+    });
     await store.refreshList();
     router.push("/");
   } catch (e) {
@@ -153,11 +136,6 @@ function getJavaLabel(java: JavaInfo): string {
     <div v-if="errorMsg" class="error-banner">
       <span>{{ errorMsg }}</span>
       <button class="error-close" @click="errorMsg = null">x</button>
-    </div>
-
-    <div class="mode-toggle">
-      <button class="mode-btn" :class="{ active: mode === 'import' }" @click="mode = 'import'">导入服务端</button>
-      <button class="mode-btn" :class="{ active: mode === 'create' }" @click="mode = 'create'">手动配置</button>
     </div>
 
     <SLCard title="Java 环境" subtitle="扫描系统中所有磁盘的 Java 安装">
@@ -220,11 +198,6 @@ function getJavaLabel(java: JavaInfo): string {
             </template>
           </SLInput>
         </div>
-        <template v-if="mode === 'create'">
-          <SLSelect label="服务端类型" :options="[{label:'Paper',value:'paper'},{label:'Purpur',value:'purpur'},{label:'Spigot',value:'spigot'},{label:'Fabric',value:'fabric'},{label:'Forge',value:'forge'},{label:'Vanilla',value:'vanilla'}]" v-model="coreType" />
-          <SLSelect label="游戏版本" :options="[{label:'1.21.4',value:'1.21.4'},{label:'1.20.4',value:'1.20.4'},{label:'1.20.1',value:'1.20.1'},{label:'1.19.4',value:'1.19.4'},{label:'1.18.2',value:'1.18.2'},{label:'1.16.5',value:'1.16.5'},{label:'1.12.2',value:'1.12.2'}]" v-model="mcVersion" />
-          <SLInput label="端口" type="number" v-model="port" />
-        </template>
         <SLInput label="最大内存 (MB)" type="number" v-model="maxMemory" />
         <SLInput label="最小内存 (MB)" type="number" v-model="minMemory" />
       </div>
@@ -233,7 +206,7 @@ function getJavaLabel(java: JavaInfo): string {
     <div class="create-actions">
       <SLButton variant="secondary" @click="router.push('/')">取消</SLButton>
       <SLButton variant="primary" size="lg" :loading="creating" @click="handleCreate">
-        {{ mode === "import" ? "导入服务器" : "创建服务器" }}
+        导入服务器
       </SLButton>
     </div>
   </div>
@@ -243,9 +216,6 @@ function getJavaLabel(java: JavaInfo): string {
 .create-view { display: flex; flex-direction: column; gap: var(--sl-space-lg); max-width: 760px; }
 .error-banner { display: flex; align-items: center; justify-content: space-between; padding: 10px 16px; background: rgba(239,68,68,0.1); border: 1px solid rgba(239,68,68,0.2); border-radius: var(--sl-radius-md); color: var(--sl-error); font-size: 0.875rem; }
 .error-close { color: var(--sl-error); font-weight: 600; }
-.mode-toggle { display: flex; gap: 2px; background: var(--sl-bg-secondary); border-radius: var(--sl-radius-md); padding: 3px; width: fit-content; }
-.mode-btn { padding: 8px 20px; border-radius: var(--sl-radius-sm); font-size: 0.875rem; font-weight: 500; color: var(--sl-text-secondary); transition: all var(--sl-transition-fast); }
-.mode-btn.active { background: var(--sl-surface); color: var(--sl-primary); box-shadow: var(--sl-shadow-sm); }
 .java-loading { display: flex; align-items: center; gap: var(--sl-space-sm); padding: var(--sl-space-lg); color: var(--sl-text-tertiary); }
 .spinner { width: 18px; height: 18px; border: 2px solid var(--sl-border); border-top-color: var(--sl-primary); border-radius: 50%; animation: sl-spin 0.8s linear infinite; }
 .java-empty { padding: var(--sl-space-lg); text-align: center; }

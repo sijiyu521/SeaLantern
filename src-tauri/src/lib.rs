@@ -21,6 +21,7 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             server_commands::create_server,
             server_commands::import_server,
+            server_commands::import_modpack,
             server_commands::start_server,
             server_commands::stop_server,
             server_commands::send_command,
@@ -37,6 +38,8 @@ pub fn run() {
             system_commands::get_system_info,
             system_commands::pick_jar_file,
             system_commands::pick_java_file,
+            system_commands::pick_folder,
+            system_commands::pick_image_file,
             player_commands::get_whitelist,
             player_commands::get_banned_players,
             player_commands::get_ops,

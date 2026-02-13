@@ -1,11 +1,14 @@
 <script setup lang="ts">
-import { ref, onMounted, watch } from "vue";
+import { ref, onMounted, watch, computed } from "vue";
 import SLCard from "../components/common/SLCard.vue";
 import SLButton from "../components/common/SLButton.vue";
 import SLInput from "../components/common/SLInput.vue";
 import SLSwitch from "../components/common/SLSwitch.vue";
 import SLModal from "../components/common/SLModal.vue";
+import SLSelect from "../components/common/SLSelect.vue";
 import { settingsApi, type AppSettings } from "../api/settings";
+import { systemApi } from "../api/system";
+import { convertFileSrc } from "@tauri-apps/api/core";
 
 const settings = ref<AppSettings | null>(null);
 const loading = ref(true);
@@ -20,10 +23,25 @@ const minMem = ref("512");
 const port = ref("25565");
 const fontSize = ref("13");
 const logLines = ref("5000");
+const bgOpacity = ref("0.3");
+const bgBlur = ref("0");
+const bgBrightness = ref("1.0");
+
+const backgroundSizeOptions = [
+  { label: "覆盖 (Cover)", value: "cover" },
+  { label: "包含 (Contain)", value: "contain" },
+  { label: "拉伸 (Fill)", value: "fill" },
+  { label: "原始大小 (Auto)", value: "auto" },
+];
 
 const showImportModal = ref(false);
 const importJson = ref("");
 const showResetConfirm = ref(false);
+
+const backgroundPreviewUrl = computed(() => {
+  if (!settings.value?.background_image) return "";
+  return convertFileSrc(settings.value.background_image);
+});
 
 onMounted(async () => {
   await loadSettings();
@@ -40,6 +58,9 @@ async function loadSettings() {
     port.value = String(s.default_port);
     fontSize.value = String(s.console_font_size);
     logLines.value = String(s.max_log_lines);
+    bgOpacity.value = String(s.background_opacity);
+    bgBlur.value = String(s.background_blur);
+    bgBrightness.value = String(s.background_brightness);
     hasChanges.value = false;
   } catch (e) {
     error.value = String(e);
@@ -61,6 +82,9 @@ async function saveSettings() {
   settings.value.default_port = parseInt(port.value) || 25565;
   settings.value.console_font_size = parseInt(fontSize.value) || 13;
   settings.value.max_log_lines = parseInt(logLines.value) || 5000;
+  settings.value.background_opacity = parseFloat(bgOpacity.value) || 0.3;
+  settings.value.background_blur = parseInt(bgBlur.value) || 0;
+  settings.value.background_brightness = parseFloat(bgBrightness.value) || 1.0;
 
   saving.value = true;
   error.value = null;
@@ -69,6 +93,9 @@ async function saveSettings() {
     success.value = "设置已保存";
     hasChanges.value = false;
     setTimeout(() => (success.value = null), 3000);
+
+    // 通知AppLayout重新加载背景
+    window.dispatchEvent(new CustomEvent('settings-updated'));
   } catch (e) {
     error.value = String(e);
   } finally {
@@ -85,6 +112,9 @@ async function resetSettings() {
     port.value = String(s.default_port);
     fontSize.value = String(s.console_font_size);
     logLines.value = String(s.max_log_lines);
+    bgOpacity.value = String(s.background_opacity);
+    bgBlur.value = String(s.background_blur);
+    bgBrightness.value = String(s.background_brightness);
     showResetConfirm.value = false;
     hasChanges.value = false;
     success.value = "已恢复默认设置";
@@ -115,6 +145,9 @@ async function handleImport() {
     port.value = String(s.default_port);
     fontSize.value = String(s.console_font_size);
     logLines.value = String(s.max_log_lines);
+    bgOpacity.value = String(s.background_opacity);
+    bgBlur.value = String(s.background_blur);
+    bgBrightness.value = String(s.background_brightness);
     showImportModal.value = false;
     importJson.value = "";
     hasChanges.value = false;
@@ -122,6 +155,27 @@ async function handleImport() {
     setTimeout(() => (success.value = null), 3000);
   } catch (e) {
     error.value = String(e);
+  }
+}
+
+async function pickBackgroundImage() {
+  try {
+    const result = await systemApi.pickImageFile();
+    console.log("Selected image:", result);
+    if (result && settings.value) {
+      settings.value.background_image = result;
+      markChanged();
+    }
+  } catch (e) {
+    console.error("Pick image error:", e);
+    error.value = String(e);
+  }
+}
+
+function clearBackgroundImage() {
+  if (settings.value) {
+    settings.value.background_image = "";
+    markChanged();
   }
 }
 </script>
@@ -247,6 +301,104 @@ async function handleImport() {
         </div>
       </SLCard>
 
+      <!-- Appearance -->
+      <SLCard title="外观" subtitle="自定义软件背景和视觉效果">
+        <div class="settings-group">
+          <div class="setting-row full-width">
+            <div class="setting-info">
+              <span class="setting-label">背景图片</span>
+              <span class="setting-desc">上传一张图片作为软件背景，支持 PNG、JPG、WEBP 等格式</span>
+            </div>
+            <div class="bg-image-picker">
+              <div v-if="settings.background_image" class="bg-preview">
+                <img :src="backgroundPreviewUrl" alt="Background preview" />
+                <div class="bg-preview-overlay">
+                  <span class="bg-preview-path">{{ settings.background_image.split('\\').pop() }}</span>
+                  <SLButton variant="danger" size="sm" @click="clearBackgroundImage">移除</SLButton>
+                </div>
+              </div>
+              <SLButton v-else variant="secondary" @click="pickBackgroundImage">
+                选择图片
+              </SLButton>
+              <SLButton v-if="settings.background_image" variant="secondary" size="sm" @click="pickBackgroundImage">
+                更换图片
+              </SLButton>
+            </div>
+          </div>
+
+          <div class="setting-row">
+            <div class="setting-info">
+              <span class="setting-label">不透明度</span>
+              <span class="setting-desc">调节背景图片的不透明度 (0.0 - 1.0)，数值越小越透明</span>
+            </div>
+            <div class="slider-control">
+              <input
+                type="range"
+                min="0"
+                max="1"
+                step="0.05"
+                v-model="bgOpacity"
+                @input="markChanged"
+                class="sl-slider"
+              />
+              <span class="slider-value">{{ bgOpacity }}</span>
+            </div>
+          </div>
+
+          <div class="setting-row">
+            <div class="setting-info">
+              <span class="setting-label">模糊程度 (px)</span>
+              <span class="setting-desc">为背景添加模糊效果，让前景内容更清晰</span>
+            </div>
+            <div class="slider-control">
+              <input
+                type="range"
+                min="0"
+                max="20"
+                step="1"
+                v-model="bgBlur"
+                @input="markChanged"
+                class="sl-slider"
+              />
+              <span class="slider-value">{{ bgBlur }}px</span>
+            </div>
+          </div>
+
+          <div class="setting-row">
+            <div class="setting-info">
+              <span class="setting-label">亮度</span>
+              <span class="setting-desc">调节背景图片的亮度 (0.0 - 2.0)，1.0 为原始亮度</span>
+            </div>
+            <div class="slider-control">
+              <input
+                type="range"
+                min="0"
+                max="2"
+                step="0.1"
+                v-model="bgBrightness"
+                @input="markChanged"
+                class="sl-slider"
+              />
+              <span class="slider-value">{{ bgBrightness }}</span>
+            </div>
+          </div>
+
+          <div class="setting-row">
+            <div class="setting-info">
+              <span class="setting-label">图片填充方式</span>
+              <span class="setting-desc">选择背景图片的显示方式</span>
+            </div>
+            <div class="input-lg">
+              <SLSelect
+                v-model="settings.background_size"
+                :options="backgroundSizeOptions"
+                @update:modelValue="markChanged"
+              />
+            </div>
+          </div>
+        </div>
+      </SLCard>
+
       <!-- Actions -->
       <div class="settings-actions">
         <div class="actions-left">
@@ -346,4 +498,104 @@ async function handleImport() {
 }
 
 .import-form { display: flex; flex-direction: column; gap: var(--sl-space-md); }
+
+.bg-image-picker {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sl-space-sm);
+  margin-top: var(--sl-space-sm);
+}
+
+.bg-preview {
+  position: relative;
+  width: 100%;
+  max-width: 400px;
+  height: 200px;
+  border-radius: var(--sl-radius-md);
+  overflow: hidden;
+  border: 1px solid var(--sl-border);
+}
+
+.bg-preview img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.bg-preview-overlay {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  padding: var(--sl-space-sm) var(--sl-space-md);
+  background: linear-gradient(to top, rgba(0,0,0,0.8), transparent);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sl-space-sm);
+}
+
+.bg-preview-path {
+  font-size: 0.8125rem;
+  color: white;
+  font-family: var(--sl-font-mono);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.slider-control {
+  display: flex;
+  align-items: center;
+  gap: var(--sl-space-md);
+  min-width: 200px;
+}
+
+.sl-slider {
+  flex: 1;
+  height: 6px;
+  border-radius: var(--sl-radius-full);
+  background: var(--sl-border);
+  outline: none;
+  -webkit-appearance: none;
+}
+
+.sl-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: var(--sl-primary);
+  cursor: pointer;
+  transition: all var(--sl-transition-fast);
+}
+
+.sl-slider::-webkit-slider-thumb:hover {
+  transform: scale(1.2);
+  box-shadow: 0 0 0 4px var(--sl-primary-bg);
+}
+
+.sl-slider::-moz-range-thumb {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: var(--sl-primary);
+  cursor: pointer;
+  border: none;
+  transition: all var(--sl-transition-fast);
+}
+
+.sl-slider::-moz-range-thumb:hover {
+  transform: scale(1.2);
+  box-shadow: 0 0 0 4px var(--sl-primary-bg);
+}
+
+.slider-value {
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--sl-text-primary);
+  min-width: 50px;
+  text-align: right;
+}
 </style>

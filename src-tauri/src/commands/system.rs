@@ -43,3 +43,37 @@ pub async fn pick_java_file(app: tauri::AppHandle) -> Result<Option<String>, Str
     rx.recv()
         .map_err(|e| format!("Dialog error: {}", e))
 }
+
+#[tauri::command]
+pub async fn pick_folder(app: tauri::AppHandle) -> Result<Option<String>, String> {
+    let (tx, rx) = std::sync::mpsc::channel();
+
+    app.dialog()
+        .file()
+        .set_title("Select modpack folder")
+        .pick_folder(move |path| {
+            let result = path.map(|p| p.to_string());
+            let _ = tx.send(result);
+        });
+
+    rx.recv()
+        .map_err(|e| format!("Dialog error: {}", e))
+}
+
+#[tauri::command]
+pub async fn pick_image_file(app: tauri::AppHandle) -> Result<Option<String>, String> {
+    let (tx, rx) = std::sync::mpsc::channel();
+
+    app.dialog()
+        .file()
+        .set_title("Select background image")
+        .add_filter("Image Files", &["png", "jpg", "jpeg", "webp", "gif", "bmp"])
+        .add_filter("All Files", &["*"])
+        .pick_file(move |path| {
+            let result = path.map(|p| p.to_string());
+            let _ = tx.send(result);
+        });
+
+    rx.recv()
+        .map_err(|e| format!("Dialog error: {}", e))
+}

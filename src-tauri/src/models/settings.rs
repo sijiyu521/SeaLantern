@@ -32,6 +32,22 @@ pub struct AppSettings {
 
     #[serde(default)]
     pub cached_java_list: Vec<JavaInfo>,
+
+    // 外观设置
+    #[serde(default)]
+    pub background_image: String,
+
+    #[serde(default = "default_bg_opacity")]
+    pub background_opacity: f32,
+
+    #[serde(default = "default_bg_blur")]
+    pub background_blur: u32,
+
+    #[serde(default = "default_bg_brightness")]
+    pub background_brightness: f32,
+
+    #[serde(default = "default_bg_size")]
+    pub background_size: String,
 }
 
 fn default_true() -> bool { true }
@@ -40,6 +56,10 @@ fn default_min_memory() -> u32 { 512 }
 fn default_port() -> u16 { 25565 }
 fn default_console_font() -> u32 { 13 }
 fn default_log_lines() -> u32 { 5000 }
+fn default_bg_opacity() -> f32 { 0.3 }
+fn default_bg_blur() -> u32 { 0 }
+fn default_bg_brightness() -> f32 { 1.0 }
+fn default_bg_size() -> String { "cover".to_string() }
 
 impl Default for AppSettings {
     fn default() -> Self {
@@ -54,6 +74,11 @@ impl Default for AppSettings {
             console_font_size: 13,
             max_log_lines: 5000,
             cached_java_list: Vec::new(),
+            background_image: String::new(),
+            background_opacity: 0.3,
+            background_blur: 0,
+            background_brightness: 1.0,
+            background_size: "cover".to_string(),
         }
     }
 }
