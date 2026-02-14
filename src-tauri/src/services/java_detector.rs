@@ -5,6 +5,8 @@ use std::fs;
 use regex::Regex;
 
 #[cfg(target_os = "windows")]
+const CREATE_NO_WINDOW: u32 = 0x08000000;
+#[cfg(target_os = "windows")]
 use winreg::enums::*;
 #[cfg(target_os = "windows")]
 use winreg::RegKey;
@@ -59,7 +61,7 @@ fn get_candidate_paths() -> Vec<String> {
     #[cfg(target_os = "windows")]
     {
         let mut scan_roots = Vec::new();
-        
+
         for drive_letter in b'C'..=b'E' {
             let drive = format!("{}:\\", drive_letter as char);
             if Path::new(&drive).exists() {
@@ -82,7 +84,7 @@ fn get_candidate_paths() -> Vec<String> {
             deep_scan_recursive(&root, &mut paths, 5);
         }
 
-        if let Ok(output) = Command::new("where").arg("java").output() {
+        if let Some(output) = command_output("where", &["java"]) {
             let stdout = String::from_utf8_lossy(&output.stdout);
             for line in stdout.lines() {
                 paths.push(line.trim().to_string());
@@ -123,7 +125,7 @@ fn deep_scan_recursive(dir: &Path, paths: &mut Vec<String>, depth: u32) {
 }
 
 fn check_java(path: &str) -> Option<JavaInfo> {
-    let output = Command::new(path).arg("-version").output().ok()?;
+    let output = command_output(path, &["-version"])?;
     let stderr = String::from_utf8_lossy(&output.stderr);
     let stdout = String::from_utf8_lossy(&output.stdout);
     let combined = if stderr.is_empty() { stdout } else { stderr };
@@ -136,7 +138,7 @@ fn check_java(path: &str) -> Option<JavaInfo> {
 
     let major_version = parse_major_version(&version);
     let is_64bit = combined.contains("64-Bit") || combined.contains("64-bit");
-    
+
     let vendor = if combined.to_lowercase().contains("zulu") {
         "Zulu".to_string()
     } else if combined.to_lowercase().contains("openjdk") {
@@ -219,12 +221,25 @@ fn push_java_exe(dir: &str, paths: &mut Vec<String>) {
 fn resolve_path_from_env(cmd: &str) -> Option<String> {
     #[cfg(target_os = "windows")]
     {
-        let output = Command::new("where").arg(cmd).output().ok()?;
+        let output = command_output("where", &[cmd])?;
         String::from_utf8_lossy(&output.stdout).lines().next().map(|s| s.trim().to_string())
     }
     #[cfg(not(target_os = "windows"))]
     {
-        let output = Command::new("which").arg(cmd).output().ok()?;
+        let output = command_output("which", &[cmd])?;
         String::from_utf8_lossy(&output.stdout).lines().next().map(|s| s.trim().to_string())
     }
+}
+
+fn command_output(program: &str, args: &[&str]) -> Option<std::process::Output> {
+    let mut command = Command::new(program);
+    command.args(args);
+
+    #[cfg(target_os = "windows")]
+    {
+        use std::os::windows::process::CommandExt;
+        command.creation_flags(CREATE_NO_WINDOW);
+    }
+
+    command.output().ok()
 }

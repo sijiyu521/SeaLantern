@@ -59,6 +59,12 @@ export const contributors: Contributor[] = [
     role: "小修小改罢",
     avatar: "https://minotar.net/avatar/MinecraftYJQ_/64",
   },
+  {
+    name: "LingyeNB",
+    role: "+3",
+    avatar: "https://mc-heads.net/avatar/LingyeNB/64",
+    url: "https://github.com/LingyeNBird",
+  }
 
   
   // ============================================
