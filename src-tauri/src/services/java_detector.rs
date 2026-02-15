@@ -132,7 +132,7 @@ fn deep_scan_recursive(dir: &Path, paths: &mut Vec<String>, depth: u32) {
         for entry in entries.flatten() {
             let path = entry.path();
             if path.is_dir() {
-                if path.file_name().map_or(false, |n| n == "bin") {
+                if path.file_name().is_some_and(|n| n == "bin") {
                     let java_exe = path.join(target_name);
                     if java_exe.exists() {
                         paths.push(java_exe.to_string_lossy().into_owned());
@@ -187,8 +187,8 @@ fn check_java(path: &str) -> Option<JavaInfo> {
 
 fn clean_windows_path(path: &Path) -> String {
     let path_str = path.to_string_lossy();
-    if path_str.starts_with(r"\\?\") {
-        path_str[4..].to_string()
+    if let Some(stripped) = path_str.strip_prefix(r"\\?\") {
+        stripped.to_string()
     } else {
         path_str.into_owned()
     }
@@ -196,7 +196,7 @@ fn clean_windows_path(path: &Path) -> String {
 
 fn parse_major_version(version: &str) -> u32 {
     let parts: Vec<&str> = version.split('.').collect();
-    let first: u32 = parts.get(0).and_then(|s| s.parse().ok()).unwrap_or(0);
+    let first: u32 = parts.first().and_then(|s| s.parse().ok()).unwrap_or(0);
     if first == 1 && parts.len() > 1 {
         parts[1].parse().unwrap_or(first)
     } else {
