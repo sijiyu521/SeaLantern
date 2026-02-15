@@ -258,7 +258,7 @@ impl ServerManager {
 
                 // Windows 下执行 bat 文件，使用 CREATE_NO_WINDOW 避免弹窗
                 let mut cmd = std::process::Command::new("cmd");
-                cmd.args(&["/c", preload_script.to_str().unwrap_or("preload.bat")])
+                cmd.args(["/c", preload_script.to_str().unwrap_or("preload.bat")])
                     .current_dir(&server.path);
 
                 // 隐藏命令行窗口

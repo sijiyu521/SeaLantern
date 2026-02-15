@@ -5,6 +5,8 @@ use std::path::{Path, PathBuf};
 use std::process::Command;
 
 #[cfg(target_os = "windows")]
+const CREATE_NO_WINDOW: u32 = 0x08000000;
+#[cfg(target_os = "windows")]
 use winreg::enums::*;
 #[cfg(target_os = "windows")]
 use winreg::RegKey;
@@ -95,7 +97,7 @@ fn get_candidate_paths() -> Vec<String> {
             deep_scan_recursive(&root, &mut paths, 5);
         }
 
-        if let Ok(output) = Command::new("where").arg("java").output() {
+        if let Some(output) = command_output("where", &["java"]) {
             let stdout = String::from_utf8_lossy(&output.stdout);
             for line in stdout.lines() {
                 paths.push(line.trim().to_string());
@@ -143,7 +145,7 @@ fn deep_scan_recursive(dir: &Path, paths: &mut Vec<String>, depth: u32) {
 }
 
 fn check_java(path: &str) -> Option<JavaInfo> {
-    let output = Command::new(path).arg("-version").output().ok()?;
+    let output = command_output(path, &["-version"])?;
     let stderr = String::from_utf8_lossy(&output.stderr);
     let stdout = String::from_utf8_lossy(&output.stdout);
     let combined = if stderr.is_empty() { stdout } else { stderr };
@@ -171,7 +173,19 @@ fn check_java(path: &str) -> Option<JavaInfo> {
         resolve_path_from_env(path)?
     } else {
         let p = fs::canonicalize(path).ok()?;
-        clean_windows_path(&p)
+        #[cfg(target_os = "windows")]
+        {
+            let path_str = p.to_string_lossy();
+            if let Some(stripped) = path_str.strip_prefix(r"\\?\") {
+                stripped.to_string()
+            } else {
+                path_str.into_owned()
+            }
+        }
+        #[cfg(not(target_os = "windows"))]
+        {
+            p.to_string_lossy().into_owned()
+        }
     };
 
     Some(JavaInfo {
@@ -181,15 +195,6 @@ fn check_java(path: &str) -> Option<JavaInfo> {
         is_64bit,
         major_version,
     })
-}
-
-fn clean_windows_path(path: &Path) -> String {
-    let path_str = path.to_string_lossy();
-    if let Some(stripped) = path_str.strip_prefix(r"\\?\") {
-        stripped.to_string()
-    } else {
-        path_str.into_owned()
-    }
 }
 
 fn parse_major_version(version: &str) -> u32 {
@@ -247,7 +252,7 @@ fn push_java_exe(dir: &str, paths: &mut Vec<String>) {
 fn resolve_path_from_env(cmd: &str) -> Option<String> {
     #[cfg(target_os = "windows")]
     {
-        let output = Command::new("where").arg(cmd).output().ok()?;
+        let output = command_output("where", &[cmd])?;
         String::from_utf8_lossy(&output.stdout)
             .lines()
             .next()
@@ -255,10 +260,23 @@ fn resolve_path_from_env(cmd: &str) -> Option<String> {
     }
     #[cfg(not(target_os = "windows"))]
     {
-        let output = Command::new("which").arg(cmd).output().ok()?;
+        let output = command_output("which", &[cmd])?;
         String::from_utf8_lossy(&output.stdout)
             .lines()
             .next()
             .map(|s| s.trim().to_string())
     }
+}
+
+fn command_output(program: &str, args: &[&str]) -> Option<std::process::Output> {
+    let mut command = Command::new(program);
+    command.args(args);
+
+    #[cfg(target_os = "windows")]
+    {
+        use std::os::windows::process::CommandExt;
+        command.creation_flags(CREATE_NO_WINDOW);
+    }
+
+    command.output().ok()
 }
