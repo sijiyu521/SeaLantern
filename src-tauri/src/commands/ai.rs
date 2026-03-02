@@ -1,5 +1,5 @@
 use crate::models::ai::{AIRequest, AIResponse, AIConfig, GeneratedCommand, LogAnalysis};
-use crate::services::global;
+use crate::services::{ai_service, global};
 use tauri::command;
 
 /// 发送消息到 AI 服务
@@ -22,13 +22,12 @@ pub async fn send_ai_message(
         user: user.unwrap_or_default(),
     };
 
-    // TODO: 调用 AI 服务
-    // 暂时返回模拟响应
-    Ok(AIResponse {
-        text: format!("收到你的消息：{}。AI 服务正在开发中，暂时无法提供实际响应。", request.prompt),
-        tokens_used: 0,
-        processing_time_ms: 0,
-    })
+    // 创建 AI 服务实例并调用
+    let ai_service = ai_service::AIService::new(settings.ai_config.clone());
+    match ai_service.send_message(request).await {
+        Ok(response) => Ok(response),
+        Err(e) => Err(e.to_string()),
+    }
 }
 
 /// 生成 Minecraft 命令
@@ -118,17 +117,11 @@ pub async fn test_ai_connection() -> Result<bool, String> {
         return Err("AI 功能未启用，请在设置中启用".to_string());
     }
 
-    match settings.ai_config.mode {
-        crate::models::ai::AIMode::API => {
-            // TODO: 实际测试 API 连接
-            // 暂时返回成功
-            Ok(true)
-        }
-        crate::models::ai::AIMode::Local => {
-            // TODO: 测试本地模型连接
-            // 暂时返回成功
-            Ok(true)
-        }
+    // 创建 AI 服务实例并测试连接
+    let ai_service = ai_service::AIService::new(settings.ai_config.clone());
+    match ai_service.test_connection().await {
+        Ok(success) => Ok(success),
+        Err(e) => Err(e.to_string()),
     }
 }
 
