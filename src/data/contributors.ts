@@ -102,6 +102,13 @@ export const contributors: Contributor[] = [
     avatar: "https://minotar.net/helm/f04be4dcd0ca49af89faf61068ec34e2/64",
     url: "https://github.com/maobuben",
   },
+  
+  {
+    name: "霂环酱",
+    role: "AI功能集成",
+    avatar: "https://minotar.net/helm/sijiyu_ora/64",
+    url: "https://github.com/sijiyu521",
+  },
   // ============================================
   // 在这里添加更多贡献者！
   // ============================================

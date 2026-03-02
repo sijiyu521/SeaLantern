@@ -277,6 +277,8 @@ sea-lantern/
 - 资源管理 - 从 Modrinth / CurseForge 搜索安装插件和 Mod
 - 暗色主题 - CSS 变量都准备好了，加一套 dark 的值就行
 - 国际化 - 目前全是中文硬编码，可以抽成语言文件
+- AI功能集成 - 支持云端LLMAPI调用或本地运行LLM，实现各种拓展功能
+
 
 ## 参与开发
 
