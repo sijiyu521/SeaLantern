@@ -32,6 +32,12 @@ const routes = [
     meta: { title: "玩家管理", icon: "users" },
   },
   {
+    path: "/ai",
+    name: "ai",
+    component: () => import("../views/AIView.vue"),
+    meta: { title: "AI助手", icon: "brain", group: "system" },
+  },
+  {
     path: "/settings",
     name: "settings",
     component: () => import("../views/SettingsView.vue"),

@@ -1,3 +1,4 @@
+pub mod ai_service;
 pub mod config_parser;
 pub mod global;
 pub mod java_detector;

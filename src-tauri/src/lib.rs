@@ -3,6 +3,7 @@ mod models;
 mod services;
 mod utils;
 
+use commands::ai as ai_commands;
 use commands::config as config_commands;
 use commands::java as java_commands;
 use commands::player as player_commands;
@@ -67,6 +68,13 @@ pub fn run() {
             settings_commands::get_system_fonts,
             update_commands::check_update,
             update_commands::open_download_url,
+            ai_commands::send_ai_message,
+            ai_commands::generate_minecraft_command,
+            ai_commands::analyze_server_logs,
+            ai_commands::get_ai_config,
+            ai_commands::save_ai_config,
+            ai_commands::test_ai_connection,
+            ai_commands::get_ai_status,
         ])
         .on_window_event(|_window, event| {
             if let tauri::WindowEvent::CloseRequested { .. } = event {

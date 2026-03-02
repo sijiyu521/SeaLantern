@@ -75,6 +75,10 @@ pub struct AppSettings {
 
     #[serde(default = "default_font_family")]
     pub font_family: String,
+
+    // AI 配置
+    #[serde(default)]
+    pub ai_config: crate::models::ai::AIConfig,
 }
 
 fn default_true() -> bool {
@@ -153,6 +157,7 @@ impl Default for AppSettings {
             theme: "auto".to_string(),
             font_size: 14,
             font_family: String::new(),
+            ai_config: crate::models::ai::AIConfig::default(),
         }
     }
 }

@@ -21,6 +21,7 @@ const navItems: NavItem[] = [
   { name: "console", path: "/console", icon: "terminal", labelKey: "common.console", group: "server" },
   { name: "config", path: "/config", icon: "settings", labelKey: "common.config_edit", group: "server" },
   { name: "players", path: "/players", icon: "users", labelKey: "common.player_manage", group: "server" },
+  { name: "ai", path: "/ai", icon: "brain", labelKey: "common.ai_assistant", group: "system" },
   { name: "settings", path: "/settings", icon: "sliders", labelKey: "common.settings", group: "system" },
   { name: "about", path: "/about", icon: "info", labelKey: "common.about", group: "system" },
 ];
@@ -51,6 +52,7 @@ const iconMap: Record<string, string> = {
   sliders:
     "M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4",
   info: "M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z",
+  brain: "M13 10V3L4 14h7v7l9-11h-7z",
   chevron: "M15 19l-7-7 7-7",
 };
 </script>

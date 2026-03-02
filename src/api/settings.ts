@@ -1,5 +1,6 @@
 import { tauriInvoke } from "./tauri";
 import type { JavaInfo } from "./java";
+import type { AIConfig } from "./ai";
 
 export interface AppSettings {
   close_servers_on_exit: boolean;
@@ -21,6 +22,7 @@ export interface AppSettings {
   theme: string;
   font_size: number;
   font_family: string;
+  ai_config: AIConfig;
 }
 
 export const settingsApi = {
